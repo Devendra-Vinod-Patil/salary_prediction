@@ -1,4 +1,4 @@
-import gradio as gr
+import streamlit as st
 import pandas as pd
 import joblib
 import os
@@ -7,35 +7,45 @@ import os
 # Load trained artifacts
 # =========================
 base_path = os.path.dirname(__file__)
+
 model = joblib.load(os.path.join(base_path, "final_model.pkl"))
 rfe = joblib.load(os.path.join(base_path, "rfe.pkl"))
 feature_names = joblib.load(os.path.join(base_path, "feature_names.pkl"))
 encoders = joblib.load(os.path.join(base_path, "encoders.pkl"))  # dict of LabelEncoders/OneHot for categorical features
 
 # =========================
-# Prediction Function
+# Streamlit App
 # =========================
-def predict_salary(experience, state, company, role, skills):
-    """
-    experience: float
-    state: str
-    company: str
-    role: str
-    skills: list of strings
-    """
-    # Build dataframe with all features
+st.set_page_config(page_title="💰 Employee Salary Prediction", layout="wide")
+st.title("💰 Employee Salary Prediction")
+st.write("Enter employee details to predict the salary based on experience, skills, location, company, and role.")
+
+# -------------------------
+# Input Fields
+# -------------------------
+experience = st.slider("Experience (years)", min_value=0, max_value=40, value=5, step=1)
+state = st.selectbox("State", options=encoders['state'].classes_.tolist())
+company = st.selectbox("Company", options=encoders['company'].classes_.tolist())
+role = st.selectbox("Role / Job Title", options=encoders['role'].classes_.tolist())
+skills = st.multiselect("Skills", options=encoders['skills'].classes_.tolist())
+
+# -------------------------
+# Predict Button
+# -------------------------
+if st.button("Predict Salary"):
+    # Build input dict
     input_dict = {}
 
     # Numeric features
     input_dict['experience'] = [experience]
 
-    # Encode categorical features using saved encoders
+    # Encode categorical features
     input_dict['state'] = [encoders['state'].transform([state])[0]]
     input_dict['company'] = [encoders['company'].transform([company])[0]]
     input_dict['role'] = [encoders['role'].transform([role])[0]]
 
-    # Skills: multi-hot encoding
-    all_skills = encoders['skills'].classes_  # all possible skills
+    # Skills multi-hot encoding
+    all_skills = encoders['skills'].classes_
     skill_vector = [1 if s in skills else 0 for s in all_skills]
     for i, s in enumerate(all_skills):
         input_dict[f"skill_{s}"] = [skill_vector[i]]
@@ -43,28 +53,10 @@ def predict_salary(experience, state, company, role, skills):
     # Convert to DataFrame
     input_df = pd.DataFrame(input_dict)
 
-    # Select only RFE features
+    # Select only features used in RFE
     input_df_rfe = input_df[feature_names]
     transformed = rfe.transform(input_df_rfe)
+
+    # Predict salary
     prediction = model.predict(transformed)
-    return round(prediction[0], 2)
-
-# =========================
-# Gradio Interface
-# =========================
-experience_input = gr.Slider(0, 40, step=1, label="Experience (years)")
-state_input = gr.Dropdown(encoders['state'].classes_.tolist(), label="State")
-company_input = gr.Dropdown(encoders['company'].classes_.tolist(), label="Company")
-role_input = gr.Dropdown(encoders['role'].classes_.tolist(), label="Role")
-skills_input = gr.CheckboxGroup(encoders['skills'].classes_.tolist(), label="Skills")
-
-iface = gr.Interface(
-    fn=predict_salary,
-    inputs=[experience_input, state_input, company_input, role_input, skills_input],
-    outputs=gr.Textbox(label="💵 Predicted Salary"),
-    title="💰 Employee Salary Prediction",
-    description="Enter employee details to predict realistic salary based on skills, experience, location, role, and company."
-)
-
-if __name__ == "__main__":
-    iface.launch()
+    st.success(f"💵 Predicted Salary: {prediction[0]:,.2f}")
