@@ -1,78 +1,70 @@
-import streamlit as st
+import gradio as gr
 import pandas as pd
 import joblib
 import os
 
 # =========================
-# Load Pickle Files
+# Load trained artifacts
 # =========================
 base_path = os.path.dirname(__file__)
 model = joblib.load(os.path.join(base_path, "final_model.pkl"))
 rfe = joblib.load(os.path.join(base_path, "rfe.pkl"))
 feature_names = joblib.load(os.path.join(base_path, "feature_names.pkl"))
+encoders = joblib.load(os.path.join(base_path, "encoders.pkl"))  # dict of LabelEncoders/OneHot for categorical features
 
 # =========================
-# Streamlit UI
+# Prediction Function
 # =========================
-st.set_page_config(page_title="💰 Salary Prediction App", layout="wide")
-st.title("💰 Salary Prediction App")
-st.write("Predict salaries using trained RandomForest model and selected features.")
+def predict_salary(experience, state, company, role, skills):
+    """
+    experience: float
+    state: str
+    company: str
+    role: str
+    skills: list of strings
+    """
+    # Build dataframe with all features
+    input_dict = {}
+
+    # Numeric features
+    input_dict['experience'] = [experience]
+
+    # Encode categorical features using saved encoders
+    input_dict['state'] = [encoders['state'].transform([state])[0]]
+    input_dict['company'] = [encoders['company'].transform([company])[0]]
+    input_dict['role'] = [encoders['role'].transform([role])[0]]
+
+    # Skills: multi-hot encoding
+    all_skills = encoders['skills'].classes_  # all possible skills
+    skill_vector = [1 if s in skills else 0 for s in all_skills]
+    for i, s in enumerate(all_skills):
+        input_dict[f"skill_{s}"] = [skill_vector[i]]
+
+    # Convert to DataFrame
+    input_df = pd.DataFrame(input_dict)
+
+    # Select only RFE features
+    input_df_rfe = input_df[feature_names]
+    transformed = rfe.transform(input_df_rfe)
+    prediction = model.predict(transformed)
+    return round(prediction[0], 2)
 
 # =========================
-# Tabs: Single or Bulk Prediction
+# Gradio Interface
 # =========================
-tab1, tab2 = st.tabs(["Single Prediction", "Bulk Prediction"])
+experience_input = gr.Slider(0, 40, step=1, label="Experience (years)")
+state_input = gr.Dropdown(encoders['state'].classes_.tolist(), label="State")
+company_input = gr.Dropdown(encoders['company'].classes_.tolist(), label="Company")
+role_input = gr.Dropdown(encoders['role'].classes_.tolist(), label="Role")
+skills_input = gr.CheckboxGroup(encoders['skills'].classes_.tolist(), label="Skills")
 
-# -------------------------
-# Single Prediction Tab
-# -------------------------
-with tab1:
-    st.header("Predict for Single Employee")
+iface = gr.Interface(
+    fn=predict_salary,
+    inputs=[experience_input, state_input, company_input, role_input, skills_input],
+    outputs=gr.Textbox(label="💵 Predicted Salary"),
+    title="💰 Employee Salary Prediction",
+    description="Enter employee details to predict realistic salary based on skills, experience, location, role, and company."
+)
 
-    # Dynamic input fields
-    user_input = {}
-    for feature in feature_names:
-        user_input[feature] = st.number_input(f"{feature}", value=0.0)
-
-    input_df = pd.DataFrame([user_input])
-
-    if st.button("Predict Salary"):
-        # Transform input using RFE
-        transformed_input = rfe.transform(input_df)
-        # Predict salary
-        prediction = model.predict(transformed_input)
-        st.success(f"💵 Predicted Salary: {prediction[0]:,.2f}")
-
-# -------------------------
-# Bulk Prediction Tab
-# -------------------------
-with tab2:
-    st.header("Predict from CSV File")
-    st.write("Upload a CSV file containing all features used in training.")
-
-    uploaded_file = st.file_uploader("Choose a CSV file", type=["csv"])
-
-    if uploaded_file:
-        df = pd.read_csv(uploaded_file)
-
-        # Check if all required features are present
-        missing_features = [f for f in feature_names if f not in df.columns]
-        if missing_features:
-            st.error(f"Missing features in CSV: {missing_features}")
-        else:
-            # Transform and predict
-            transformed_data = rfe.transform(df[feature_names])
-            predictions = model.predict(transformed_data)
-            df["Predicted_Salary"] = predictions
-
-            st.success("✅ Predictions completed!")
-            st.dataframe(df)
-
-            # Download predictions
-            csv = df.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                label="Download Predictions as CSV",
-                data=csv,
-                file_name="predicted_salaries.csv",
-                mime="text/csv"
-            )
+if __name__ == "__main__":
+    iface.launch()
