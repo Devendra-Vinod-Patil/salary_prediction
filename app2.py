@@ -48,18 +48,27 @@ infra_score = st.number_input("Infrastructure Score", min_value=0.0, step=0.1)
 # =========================
 if st.button("Predict Salary"):
     try:
-        # Create dataframe with same column names used in training
+        # Make sure input matches pipeline features
         input_data = pd.DataFrame([{
             "City": city,
             "Industry": industry,
             "Job_Role": job_role,
-            "Skills": ", ".join(skills),  # if you used combined strings in training
-            "Experience": experience,
-            "Education_Hubs": education_score,
-            "Infrastructure_Score": infra_score
+            "Skills": ", ".join(skills),           # match how it was trained
+            "Experience": float(experience),
+            "Education_Hubs": float(education_score),
+            "Infrastructure_Score": float(infra_score)
         }])
 
-        # Prediction via pipeline
+        # Ensure input columns exactly match pipeline's expected features
+        expected_cols = pipeline.feature_names_in_
+        missing_cols = set(expected_cols) - set(input_data.columns)
+        for col in missing_cols:
+            input_data[col] = 0  # default value for missing columns
+
+        # Reorder columns
+        input_data = input_data[expected_cols]
+
+        # Prediction
         prediction = pipeline.predict(input_data)[0]
         st.success(f"💰 Predicted Salary: ₹{prediction:,.2f}")
 
