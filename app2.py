@@ -1,62 +1,74 @@
 import streamlit as st
-import pandas as pd
 import joblib
+import numpy as np
 import os
 
 # =========================
-# Load trained artifacts
+# Load Pickle Files
 # =========================
 base_path = os.path.dirname(__file__)
 
-model = joblib.load(os.path.join(base_path, "final_model.pkl"))
-rfe = joblib.load(os.path.join(base_path, "rfe.pkl"))
 feature_names = joblib.load(os.path.join(base_path, "feature_names.pkl"))
-encoders = joblib.load(os.path.join(base_path, "encoders.pkl"))  # dict of LabelEncoders/OneHot for categorical features
+rfe = joblib.load(os.path.join(base_path, "rfe.pkl"))
+model = joblib.load(os.path.join(base_path, "final_model.pkl"))
 
 # =========================
 # Streamlit App
 # =========================
-st.set_page_config(page_title="💰 Employee Salary Prediction", layout="wide")
-st.title("💰 Employee Salary Prediction")
-st.write("Enter employee details to predict the salary based on experience, skills, location, company, and role.")
+st.set_page_config(page_title="Salary Prediction App", page_icon="💼", layout="centered")
+st.title("💼 Salary Prediction App")
+st.write("Fill in your details below to predict the expected salary.")
 
-# -------------------------
-# Input Fields
-# -------------------------
-experience = st.slider("Experience (years)", min_value=0, max_value=40, value=5, step=1)
-state = st.selectbox("State", options=encoders['state'].classes_.tolist())
-company = st.selectbox("Company", options=encoders['company'].classes_.tolist())
-role = st.selectbox("Role / Job Title", options=encoders['role'].classes_.tolist())
-skills = st.multiselect("Skills", options=encoders['skills'].classes_.tolist())
+# =========================
+# Feature Inputs
+# =========================
 
-# -------------------------
-# Predict Button
-# -------------------------
+user_input = {}
+
+# Example mappings (adjust based on your dataset)
+categorical_options = {
+    "state": ["Maharashtra", "Gujarat", "Karnataka", "Delhi", "Tamil Nadu"],
+    "company_role": ["Software Engineer", "Data Analyst", "Manager", "Developer", "Intern"],
+    "skills": [
+        "Python", "Java", "C++", "C#", "JavaScript", "SQL", "R", "PHP",
+        "HTML/CSS", "Excel", "Communication", "Machine Learning", "Deep Learning",
+        "Data Science", "Cloud Computing", "AWS", "Azure", "Google Cloud",
+        "Tableau", "Power BI", "Git/GitHub", "Linux", "Networking"
+    ]
+}
+
+
+for feature in feature_names:
+    if feature in categorical_options:
+        user_input[feature] = st.selectbox(f"{feature}", categorical_options[feature])
+    else:
+        user_input[feature] = st.number_input(f"{feature}", min_value=0.0, step=1.0)
+
+# =========================
+# Prediction
+# =========================
+
 if st.button("Predict Salary"):
-    # Build input dict
-    input_dict = {}
+    try:
+        # Convert to array
+        input_values = [user_input[feat] for feat in feature_names]
 
-    # Numeric features
-    input_dict['experience'] = [experience]
+        # Encode categorical values to numeric (basic handling)
+        input_encoded = []
+        for feat, val in zip(feature_names, input_values):
+            if feat in categorical_options:
+                input_encoded.append(categorical_options[feat].index(val))  # simple label encoding
+            else:
+                input_encoded.append(val)
 
-    # Encode categorical features
-    input_dict['state'] = [encoders['state'].transform([state])[0]]
-    input_dict['company'] = [encoders['company'].transform([company])[0]]
-    input_dict['role'] = [encoders['role'].transform([role])[0]]
+        input_array = np.array(input_encoded).reshape(1, -1)
 
-    # Skills multi-hot encoding
-    all_skills = encoders['skills'].classes_
-    skill_vector = [1 if s in skills else 0 for s in all_skills]
-    for i, s in enumerate(all_skills):
-        input_dict[f"skill_{s}"] = [skill_vector[i]]
+        # Apply RFE transform
+        input_array = rfe.transform(input_array)
 
-    # Convert to DataFrame
-    input_df = pd.DataFrame(input_dict)
+        # Predict
+        prediction = model.predict(input_array)[0]
+        st.success(f"💰 Predicted Salary: ₹{prediction:,.2f}")
 
-    # Select only features used in RFE
-    input_df_rfe = input_df[feature_names]
-    transformed = rfe.transform(input_df_rfe)
-
-    # Predict salary
-    prediction = model.predict(transformed)
-    st.success(f"💵 Predicted Salary: {prediction[0]:,.2f}")
+    except Exception as e:
+        st.error(f"⚠️ Error: {str(e)}")
