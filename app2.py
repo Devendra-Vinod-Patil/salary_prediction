@@ -4,20 +4,29 @@ import pandas as pd
 import os
 
 # =========================
-# Load Pipeline
+# Load Models & Files
 # =========================
 base_path = os.path.dirname(__file__)
+
+# Load preprocessing pipeline
 pipeline = joblib.load(os.path.join(base_path, "salary_pipeline.pkl"))
 
+# Load final trained model
+final_model = joblib.load(os.path.join(base_path, "final_model.pkl"))
+
+# Load feature names and selected features
+feature_names = joblib.load(os.path.join(base_path, "feature_names.pkl"))
+selected_features = joblib.load(os.path.join(base_path, "rfe.pkl"))
+
 # =========================
-# Streamlit App
+# Streamlit App UI
 # =========================
 st.set_page_config(page_title="Salary Prediction App", page_icon="💼", layout="centered")
 st.title("💼 Salary Prediction App")
 st.write("Fill in your details to predict the expected salary.")
 
 # =========================
-# Input UI
+# Input Fields
 # =========================
 city = st.selectbox("Select City", [
     "Mumbai", "Delhi", "Bengaluru", "Hyderabad", "Chennai", "Pune",
@@ -39,7 +48,6 @@ skills = st.multiselect("Skills", [
 ])
 
 experience = st.slider("Years of Experience", 0, 20, 1)
-
 education_score = st.number_input("Education Hubs (count)", min_value=0, step=1)
 infra_score = st.number_input("Infrastructure Score", min_value=0.0, step=0.1)
 
@@ -48,19 +56,25 @@ infra_score = st.number_input("Infrastructure Score", min_value=0.0, step=0.1)
 # =========================
 if st.button("Predict Salary"):
     try:
-        # Create input dataframe exactly like during training
+        # Create input DataFrame
         input_data = pd.DataFrame([{
             "City": city,
             "Industry": industry,
             "Job_Role": job_role,
-            "Skills": ", ".join(skills),  # if trained as combined string
+            "Skills": ", ".join(skills),   # If training treated skills as a combined string
             "Experience": experience,
             "Education_Hubs": education_score,
             "Infrastructure_Score": infra_score
         }])
 
-        # Prediction
-        prediction = pipeline.predict(input_data)[0]
+        # Keep only selected features
+        input_data = input_data[[col for col in selected_features if col in input_data.columns]]
+
+        # Apply preprocessing
+        X_processed = pipeline.transform(input_data)
+
+        # Predict with final model
+        prediction = final_model.predict(X_processed)[0]
 
         st.success(f"💰 Predicted Salary: ₹{prediction:,.2f}")
 
