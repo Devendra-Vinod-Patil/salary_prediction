@@ -14,9 +14,12 @@ pipeline = joblib.load(os.path.join(base_path, "salary_pipeline.pkl"))
 # Load final trained model
 final_model = joblib.load(os.path.join(base_path, "final_model.pkl"))
 
-# Load feature names and selected features
+# Load feature names and RFE object
 feature_names = joblib.load(os.path.join(base_path, "feature_names.pkl"))
-selected_features = joblib.load(os.path.join(base_path, "rfe.pkl"))
+rfe = joblib.load(os.path.join(base_path, "rfe.pkl"))
+
+# Extract selected features from RFE
+selected_features = [f for f, s in zip(feature_names, rfe.support_) if s]
 
 # =========================
 # Streamlit App UI
@@ -61,7 +64,7 @@ if st.button("Predict Salary"):
             "City": city,
             "Industry": industry,
             "Job_Role": job_role,
-            "Skills": ", ".join(skills),   # If training treated skills as a combined string
+            "Skills": ", ".join(skills),
             "Experience": experience,
             "Education_Hubs": education_score,
             "Infrastructure_Score": infra_score
