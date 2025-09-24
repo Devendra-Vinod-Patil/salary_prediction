@@ -86,6 +86,12 @@ def main():
                 color: #2e7d32;
                 text-align: center;
             }
+            .correction-note {
+                font-size: 14px;
+                color: #555;
+                text-align: center;
+                margin-top: 10px;
+            }
         </style>
     """, unsafe_allow_html=True)
 
@@ -209,7 +215,15 @@ def main():
         # --- Make Prediction ---
         try:
             prediction = model.predict(final_input_df)[0]
-            st.markdown(f'<div class="result-box"><p class="result-text">Predicted Annual Salary: ₹ {prediction:,.2f}</p></div>', unsafe_allow_html=True)
+            
+            correction_note = ""
+            # --- Add a safety net for unrealistic predictions ---
+            if prediction < 300000:
+                prediction = 300000 # Minimum salary from the dataset
+                correction_note = "<p class='correction-note'>Note: The model produced an unrealistic prediction for these inputs. The result has been capped at the minimum reasonable salary.</p>"
+
+            st.markdown(f'<div class="result-box"><p class="result-text">Predicted Annual Salary: ₹ {prediction:,.2f}</p>{correction_note}</div>', unsafe_allow_html=True)
+
         except Exception as e:
             st.error(f"An error occurred during prediction: {e}")
             st.error("Please ensure all inputs are correct. The model is sensitive to the exact feature set it was trained on.")
