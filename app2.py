@@ -217,10 +217,17 @@ def main():
             prediction = model.predict(final_input_df)[0]
             
             correction_note = ""
-            # --- Add a safety net for unrealistic predictions ---
+            # --- Smarter safety net for unrealistic predictions ---
+            # If the model predicts too low, provide a reasonable baseline based on experience level
             if prediction < 300000:
-                prediction = 300000 # Minimum salary from the dataset
-                correction_note = "<p class='correction-note'>Note: The model produced an unrealistic prediction for these inputs. The result has been capped at the minimum reasonable salary.</p>"
+                baseline_salaries = {
+                    'Internship': 300000,
+                    'Entry-Level': 450000,
+                    'Mid-Level': 750000,
+                    'Senior-Level': 1200000
+                }
+                prediction = baseline_salaries.get(exp_level, 400000) # Default to a safe value
+                correction_note = "<p class='correction-note'>Note: The model's prediction was unrealistic. A baseline salary for the selected experience level is shown instead.</p>"
 
             st.markdown(f'<div class="result-box"><p class="result-text">Predicted Annual Salary: ₹ {prediction:,.2f}</p>{correction_note}</div>', unsafe_allow_html=True)
 
