@@ -1,184 +1,197 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 import joblib
-import datetime
-import os
+import numpy as np
 
-# --- Page Configuration ---
-st.set_page_config(
-    page_title="Salary Prediction App",
-    page_icon="💼",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+# Load the trained model
+# This model was trained on one-hot encoded categorical features and scaled numerical features.
+# We will replicate the feature engineering process for prediction.
+model = joblib.load('final_model.pkl')
 
-# --- Helper Functions ---
-@st.cache_resource
-def load_model_assets():
-    """Loads the ML model and scaler, caching them for performance."""
-    try:
-        # Get the absolute path to the directory where the script is running
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        
-        model_path = os.path.join(base_dir, 'final_model.pkl')
-        scaler_path = os.path.join(base_dir, 'scaler.pkl')
+# Extract feature names from the model, which knows the exact column order and names it was trained on.
+# This is the most reliable way to ensure the input matches the model's expectations.
+MODEL_FEATURES = model.feature_names_in_
 
-        # Check if files exist before loading
-        if not os.path.exists(model_path) or not os.path.exists(scaler_path):
-            return None, None # Return None to be handled later
-        
-        model = joblib.load(model_path)
-        scaler = joblib.load(scaler_path)
-        return model, scaler
-    except Exception as e:
-        # Catch any other loading errors
-        st.error(f"An error occurred while loading model assets: {e}")
-        return None, None
+def main():
+    """Main function to run the Streamlit application."""
 
-def preprocess_input(data, scaler, model_columns):
-    """
-    Preprocesses user input dictionary to create a DataFrame that matches the model's training format.
-    """
-    # Create a single-row DataFrame from the user's input data
-    df = pd.DataFrame([data])
+    st.set_page_config(layout="wide", page_title="Salary Prediction App")
 
-    # --- 1. Feature Engineering for Date Column ---
-    df['Job_Posting_Date'] = pd.to_datetime(df['Job_Posting_Date'])
-    df['day'] = df['Job_Posting_Date'].dt.day
-    df['month'] = df['Job_Posting_Date'].dt.month
-    df['year'] = df['Job_Posting_Date'].dt.year
-    df['weekday'] = df['Job_Posting_Date'].dt.dayofweek
-    df['quarter'] = df['Job_Posting_Date'].dt.quarter
-
-    # --- 2. Scaling Numerical Features ---
-    # Define the numerical columns that the scaler expects
-    numerical_cols_to_scale = [
-        'Job_ID', 'Talent_Inflow', 'Talent_Outflow', 'Infrastructure_Score',
-        'Smart_City_Investment', 'GCC_Presence', 'MSME_Growth_Rate',
-        'Unemployment_Rate', 'Education_Hubs', 'Cost_of_Living_Index', 'day',
-        'month', 'year', 'weekday', 'quarter'
-    ]
-    # Apply the pre-fitted scaler
-    df[numerical_cols_to_scale] = scaler.transform(df[numerical_cols_to_scale])
-
-    # --- 3. One-Hot Encoding for Categorical Features ---
-    # Create an empty DataFrame with all the columns the model was trained on, filled with zeros
-    final_df = pd.DataFrame(columns=model_columns, index=df.index, data=0)
-
-    # Populate the scaled numerical values into our final DataFrame
-    for col in numerical_cols_to_scale:
-        if col in final_df.columns:
-            final_df[col] = df[col]
-
-    # Dynamically create the one-hot encoded column names and set them to 1
-    categorical_inputs = {
-        'City': data['City'],
-        'Industry': data['Industry'],
-        'Job_Role': data['Job_Role'],
-        'Experience_Level': data['Experience_Level'],
-        'Skill_Set': data['Skill_Set'] 
-    }
-    
-    for feature, value in categorical_inputs.items():
-        # Construct the column name like 'City_Ranchi'
-        one_hot_col = f"{feature}_{value}"
-        if one_hot_col in final_df.columns:
-            final_df[one_hot_col] = 1
-            
-    # Ensure the final column order matches the model's training data exactly
-    return final_df[model_columns]
-
-
-# --- Load Model and Scaler ---
-model, scaler = load_model_assets()
-
-# This list must exactly match the columns and their order from the training notebook.
-# Any discrepancy will cause the prediction to fail.
-MODEL_COLUMNS = ['City_Agra', 'City_Jodhpur', 'City_Madurai', 'City_Nashik', 'City_Raipur', 'City_Rajkot', 'City_Ranchi', 'City_Vadodara', 'City_Vijayawada', 'City_Visakhapatnam', 'Industry_Education', 'Industry_Finance', 'Industry_Healthcare', 'Industry_Manufacturing', 'Industry_Others', 'Industry_Pharma', 'Industry_Retail', 'Industry_Tech', 'Job_Role_AI/ML', 'Job_Role_Business Development', 'Job_Role_Data Science', 'Job_Role_Engineering', 'Job_Role_Operations', 'Job_Role_Others', 'Job_Role_Retail', 'Job_Role_Sales', 'Skill_Set_CRM, Market Analysis', 'Skill_Set_CRM, Market Analysis, Sales', 'Skill_Set_CRM, Sales', 'Skill_Set_CRM, Sales, Market Analysis', 'Skill_Set_Communication, Negotiation', 'Skill_Set_Communication, Negotiation, Sales', 'Skill_Set_Communication, Sales', 'Skill_Set_Communication, Sales, Negotiation', 'Skill_Set_Customer Service, English', 'Skill_Set_Customer Service, English, MS Office', 'Skill_Set_Customer Service, MS Office', 'Skill_Set_Customer Service, MS Office, English', 'Skill_Set_Data Visualization, Python', 'Skill_Set_Data Visualization, Python, SQL', 'Skill_Set_Data Visualization, Python, SQL, Statistics', 'Skill_Set_Data Visualization, Python, Statistics', 'Skill_Set_Data Visualization, Python, Statistics, SQL', 'Skill_Set_Data Visualization, SQL', 'Skill_Set_Data Visualization, SQL, Python', 'Skill_Set_Data Visualization, SQL, Python, Statistics', 'Skill_Set_Data Visualization, SQL, Statistics', 'Skill_Set_Data Visualization, SQL, Statistics, Python', 'Skill_Set_Data Visualization, Statistics', 'Skill_Set_Data Visualization, Statistics, Python', 'Skill_Set_Data Visualization, Statistics, Python, SQL', 'Skill_Set_Data Visualization, Statistics, SQL', 'Skill_Set_Data Visualization, Statistics, SQL, Python', 'Skill_Set_Deep Learning, NLP', 'Skill_Set_Deep Learning, NLP, Python', 'Skill_Set_Deep Learning, NLP, Python, TensorFlow', 'Skill_Set_Deep Learning, NLP, TensorFlow', 'Skill_Set_Deep Learning, NLP, TensorFlow, Python', 'Skill_Set_Deep Learning, Python', 'Skill_Set_Deep Learning, Python, NLP', 'Skill_Set_Deep Learning, Python, NLP, TensorFlow', 'Skill_Set_Deep Learning, Python, TensorFlow', 'Skill_Set_Deep Learning, Python, TensorFlow, NLP', 'Skill_Set_Deep Learning, TensorFlow', 'Skill_Set_Deep Learning, TensorFlow, NLP', 'Skill_Set_Deep Learning, TensorFlow, NLP, Python', 'Skill_Set_Deep Learning, TensorFlow, Python', 'Skill_Set_Deep Learning, TensorFlow, Python, NLP', 'Skill_Set_English, Customer Service', 'Skill_Set_English, Customer Service, MS Office', 'Skill_Set_English, MS Office', 'Skill_Set_English, MS Office, Customer Service', 'Skill_Set_Excel, Logistics', 'Skill_Set_Excel, Logistics, Operations Management', 'Skill_Set_Excel, Operations Management', 'Skill_Set_Excel, Operations Management, Logistics', 'Skill_Set_Java, Project Management', 'Skill_Set_Java, Project Management, Python', 'Skill_Set_Java, Project Management, Python, SQL', 'Skill_Set_Java, Project Management, SQL', 'Skill_Set_Java, Project Management, SQL, Python', 'Skill_Set_Java, Python', 'Skill_Set_Java, Python, Project Management', 'Skill_Set_Java, Python, Project Management, SQL', 'Skill_Set_Java, Python, SQL', 'Skill_Set_Java, Python, SQL, Project Management', 'Skill_Set_Java, SQL', 'Skill_Set_Java, SQL, Project Management', 'Skill_Set_Java, SQL, Project Management, Python', 'Skill_Set_Java, SQL, Python', 'Skill_Set_Java, SQL, Python, Project Management', 'Skill_Set_Logistics, Excel', 'Skill_Set_Logistics, Excel, Operations Management', 'Skill_Set_Logistics, Operations Management', 'Skill_Set_Logistics, Operations Management, Excel', 'Skill_Set_MS Office, Customer Service', 'Skill_Set_MS Office, Customer Service, English', 'Skill_Set_MS Office, English', 'Skill_Set_MS Office, English, Customer Service', 'Skill_Set_Market Analysis, CRM', 'Skill_Set_Market Analysis, CRM, Sales', 'Skill_Set_Market Analysis, Sales', 'Skill_Set_Market Analysis, Sales, CRM', 'Skill_Set_NLP, Deep Learning', 'Skill_Set_NLP, Deep Learning, Python', 'Skill_Set_NLP, Deep Learning, Python, TensorFlow', 'Skill_Set_NLP, Deep Learning, TensorFlow', 'Skill_Set_NLP, Deep Learning, TensorFlow, Python', 'Skill_Set_NLP, Python', 'Skill_Set_NLP, Python, Deep Learning', 'Skill_Set_NLP, Python, Deep Learning, TensorFlow', 'Skill_Set_NLP, Python, TensorFlow', 'Skill_Set_NLP, Python, TensorFlow, Deep Learning', 'Skill_Set_NLP, TensorFlow', 'Skill_Set_NLP, TensorFlow, Deep Learning', 'Skill_Set_NLP, TensorFlow, Deep Learning, Python', 'Skill_Set_NLP, TensorFlow, Python', 'Skill_Set_NLP, TensorFlow, Python, Deep Learning', 'Skill_Set_Negotiation, Communication', 'Skill_Set_Negotiation, Communication, Sales', 'Skill_Set_Negotiation, Sales', 'Skill_Set_Negotiation, Sales, Communication', 'Skill_Set_Operations Management, Excel', 'Skill_Set_Operations Management, Excel, Logistics', 'Skill_Set_Operations Management, Logistics', 'Skill_Set_Operations Management, Logistics, Excel', 'Job_ID', 'Talent_Inflow', 'Talent_Outflow', 'Infrastructure_Score', 'Smart_City_Investment', 'GCC_Presence', 'MSME_Growth_Rate', 'Unemployment_Rate', 'Education_Hubs', 'Cost_of_Living_Index', 'day', 'month', 'year', 'weekday', 'quarter']
-
-
-# --- UI Layout ---
-st.title("👨‍💻 Employee Salary Prediction")
-st.markdown("This application predicts the salary range for a job in a non-metro Indian city. Fill in the details in the sidebar to get a prediction.")
-
-# Display a warning if the models could not be loaded
-if model is None or scaler is None:
-    st.error(
-        "**Failed to load model assets!** Please ensure the `final_model.pkl` and `scaler.pkl` files are present. "
-        "You may need to run the `create_scaler.py` script first as described in the README."
-    )
-else:
-    # --- Sidebar for User Inputs ---
-    with st.sidebar:
-        st.header("📋 Enter Job Details")
-
-        # Use columns for a cleaner layout
-        col1, col2 = st.columns(2)
-        with col1:
-            city = st.selectbox("City", ['Ranchi', 'Vijayawada', 'Vadodara', 'Agra', 'Jodhpur', 'Visakhapatnam', 'Madurai', 'Raipur', 'Rajkot', 'Nashik'])
-            job_role = st.selectbox("Job Role", ['Retail', 'AI/ML', 'Sales', 'Data Science', 'Engineering', 'Operations', 'Business Development', 'Others'])
-        with col2:
-            industry = st.selectbox("Industry", ['Retail', 'Tech', 'Manufacturing', 'Education', 'Finance', 'Pharma', 'Healthcare', 'Others'])
-            experience_level = st.selectbox("Experience Level", ['Mid-Level', 'Entry-Level', 'Senior-Level', 'Internship'])
-
-        # Skill set is a complex feature; for this app, we'll simplify it to a text input.
-        # The user should enter a value that exists in the training data for best results.
-        skill_set = st.text_input("Skill Set (e.g., Python, SQL)", 'Python, SQL, Data Visualization')
-        
-        st.subheader("📈 City & Economic Metrics")
-        col3, col4 = st.columns(2)
-        with col3:
-            talent_inflow = st.number_input("Talent Inflow", min_value=0, value=1159)
-            infra_score = st.slider("Infrastructure Score", min_value=0.0, max_value=100.0, value=74.25)
-            msme_growth = st.number_input("MSME Growth Rate (%)", value=6.2)
-            education_hubs = st.number_input("Education Hubs", min_value=0, value=29)
-        with col4:
-            talent_outflow = st.number_input("Talent Outflow", min_value=0, value=1583)
-            smart_city_inv = st.number_input("Smart City Investment", min_value=0.0, value=9162.21)
-            unemployment_rate = st.number_input("Unemployment Rate (%)", value=9.28)
-            cost_of_living = st.slider("Cost of Living Index", min_value=0.0, max_value=120.0, value=74.65)
-
-        st.subheader("⚙️ Other Details")
-        col5, col6 = st.columns(2)
-        with col5:
-             gcc_presence = st.selectbox("GCC Presence", [0, 1], help="1 if a Global Capability Center is present, 0 if not")
-             job_id = st.number_input("Job ID (simulation)", min_value=1, value=12001)
-        with col6:
-            job_posting_date = st.date_input("Job Posting Date", datetime.date(2024, 9, 24))
-
-
-    # --- Prediction Logic ---
-    if st.button("Predict Salary Range", type="primary", use_container_width=True):
-        with st.spinner("🧠 Analyzing data..."):
-            # Collect user input into a dictionary
-            user_data = {
-                'Job_ID': job_id, 'City': city, 'Industry': industry, 'Job_Role': job_role,
-                'Skill_Set': skill_set, 'Experience_Level': experience_level,
-                'Talent_Inflow': talent_inflow, 'Talent_Outflow': talent_outflow,
-                'Infrastructure_Score': infra_score, 'Smart_City_Investment': smart_city_inv,
-                'GCC_Presence': gcc_presence, 'MSME_Growth_Rate': msme_growth,
-                'Unemployment_Rate': unemployment_rate, 'Education_Hubs': education_hubs,
-                'Cost_of_Living_Index': cost_of_living, 'Job_Posting_Date': str(job_posting_date),
+    # Custom CSS for styling
+    st.markdown("""
+        <style>
+            .main {
+                background-color: #f5f5f5;
             }
+            .stApp {
+                background-color: #f5f5f5;
+            }
+            .stButton>button {
+                background-color: #4CAF50;
+                color: white;
+                border-radius: 12px;
+                padding: 10px 24px;
+                font-size: 16px;
+                border: none;
+                transition: all 0.3s;
+            }
+            .stButton>button:hover {
+                background-color: #45a049;
+                box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2);
+            }
+            .title {
+                text-align: center;
+                color: #333;
+                font-family: 'Arial Black', Gadget, sans-serif;
+            }
+            .result-box {
+                background-color: #e8f5e9;
+                border-left: 6px solid #4CAF50;
+                padding: 20px;
+                border-radius: 8px;
+                margin-top: 20px;
+            }
+            .result-text {
+                font-size: 24px;
+                font-weight: bold;
+                color: #2e7d32;
+                text-align: center;
+            }
+        </style>
+    """, unsafe_allow_html=True)
 
-            try:
-                # Preprocess the input to get a model-ready DataFrame
-                processed_input = preprocess_input(user_data, scaler, MODEL_COLUMNS)
-                
-                # Make prediction
-                prediction = model.predict(processed_input)
-                predicted_salary = prediction[0]
 
-                # Display result in the main area
-                st.success("Prediction Successful!")
-                st.metric(
-                    label="Predicted Annual Salary (INR)",
-                    value=f"₹ {predicted_salary:,.2f}"
-                )
-                st.info("Note: This prediction is based on the provided model and data, and represents an estimated salary range.")
+    st.markdown('<h1 class="title">Indian Non-Metro Job Salary Prediction</h1>', unsafe_allow_html=True)
+    st.info("This app predicts the salary based on job-related features. Please fill in the details below.")
 
-            except Exception as e:
-                st.error(f"An error occurred during prediction: {e}")
-                st.warning("Please ensure all inputs are filled correctly. The 'Skill_Set' must be a comma-separated string that was present in the original training data for an accurate prediction.")
+    # --- Create Input Fields for User ---
+    # Based on the analysis of the provided notebook
 
+    # Categorical Features (with options extracted from the notebook)
+    cities = ['Raipur', 'Vijayawada', 'Jodhpur', 'Visakhapatnam', 'Madurai', 'Ranchi', 'Rajkot', 'Agra', 'Vadodara', 'Nashik']
+    industries = ['Tech', 'Pharma', 'Others', 'Retail', 'Education', 'Manufacturing', 'Healthcare', 'Finance']
+    job_roles = ['Business Development', 'Engineering', 'AI/ML', 'Operations', 'Data Science', 'Others', 'Sales', 'Retail']
+    exp_levels = ['Entry-Level', 'Mid-Level', 'Senior-Level', 'Internship']
+    company_names = ['Reliance Retail', 'Others', 'HCLTech']
+    # The model was trained on very specific skill combinations. A dropdown is the only way to ensure valid input.
+    skill_sets = [
+        'Market Analysis, Sales, CRM', 'Sales, Market Analysis, CRM', 'CRM, Market Analysis, Sales',
+        'CRM, Sales, Market Analysis', 'Market Analysis, CRM, Sales', 'Python, Java', 'SQL, Python',
+        'SQL, Statistics', 'Python, Deep Learning, TensorFlow, NLP', 'Python, Data Visualization, Statistics',
+        # Adding a few more common ones from the notebook for better usability
+        'Customer Service, English', 'MS Office, Customer Service', 'Negotiation, Communication',
+        'SQL, Python, Data Visualization', 'Data Visualization, Statistics', 'Java, Project Management'
+    ]
+
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.subheader("Job & Company Details")
+        city = st.selectbox('City', options=cities)
+        industry = st.selectbox('Industry', options=industries)
+        job_role = st.selectbox('Job Role', options=job_roles)
+        exp_level = st.selectbox('Experience Level', options=exp_levels)
+        company_name = st.selectbox('Company Name', options=company_names)
+        skill_set = st.selectbox('Skill Set', options=skill_sets)
+
+    with col2:
+        st.subheader("Economic & Infrastructure Factors")
+        talent_inflow = st.number_input('Talent Inflow', min_value=0, value=1300)
+        talent_outflow = st.number_input('Talent Outflow', min_value=0, value=1300)
+        infra_score = st.number_input('Infrastructure Score', min_value=0.0, max_value=100.0, value=67.0, step=0.1)
+        smart_city_inv = st.number_input('Smart City Investment (in Cr)', min_value=0.0, value=3900.0, step=100.0)
+        msme_growth = st.number_input('MSME Growth Rate (%)', min_value=0.0, value=7.2, step=0.1)
+        unemployment_rate = st.number_input('Unemployment Rate (%)', min_value=0.0, value=7.5, step=0.1)
+        education_hubs = st.number_input('Number of Education Hubs', min_value=0, value=15)
+        cost_of_living = st.number_input('Cost of Living Index', min_value=0.0, max_value=150.0, value=80.0, step=0.1)
+        gcc_presence = st.selectbox('GCC Presence', options=[0, 1], help="0 if No, 1 if Yes")
+
+    with col3:
+        st.subheader("Other Model Inputs")
+        st.warning("The model was trained with some unusual features like Job ID and date components. Please provide them as well.")
+        # The model file includes these features, so we must provide them.
+        job_id = st.number_input('Job ID (Identifier)', min_value=1, value=6000)
+        day = st.number_input('Day (1-31)', min_value=1, max_value=31, value=15)
+        month = st.number_input('Month (1-12)', min_value=1, max_value=12, value=6)
+        year = st.number_input('Year', min_value=2020, max_value=2030, value=2024)
+        weekday = st.number_input('Weekday (0=Mon, 6=Sun)', min_value=0, max_value=6, value=3)
+        quarter = st.number_input('Quarter (1-4)', min_value=1, max_value=4, value=2)
+
+
+    if st.button('Predict Salary'):
+        # --- Preprocess the input to match the model's training data ---
+
+        # 1. Create a dictionary of the raw user inputs
+        input_data = {
+            'City': city,
+            'Industry': industry,
+            'Job_Role': job_role,
+            'Skill_Set': skill_set,
+            'Experience_Level': exp_level,
+            'Company_Name': company_name,
+            # Placeholder for date-related features that the model expects but we don't use directly for prediction logic
+            'weekday_name': 'Monday', # These will be one-hot encoded
+            'season': 'Summer',
+            # Numerical features
+            'Job_ID': job_id,
+            'Talent_Inflow': talent_inflow,
+            'Talent_Outflow': talent_outflow,
+            'Infrastructure_Score': infra_score,
+            'Smart_City_Investment': smart_city_inv,
+            'GCC_Presence': gcc_presence,
+            'MSME_Growth_Rate': msme_growth,
+            'Unemployment_Rate': unemployment_rate,
+            'Education_Hubs': education_hubs,
+            'Cost_of_Living_Index': cost_of_living,
+            'day': day,
+            'month': month,
+            'year': year,
+            'weekday': weekday,
+            'quarter': quarter,
+        }
+
+        # 2. Create a DataFrame with a single row for the input
+        # This will be used to build the final feature vector
+        input_df_raw = pd.DataFrame([input_data])
+
+
+        # 3. Build the final feature DataFrame that matches the model's input
+        # Initialize a dataframe with all the feature columns the model expects, filled with zeros.
+        final_input_df = pd.DataFrame(columns=MODEL_FEATURES)
+        final_input_df.loc[0] = 0
+
+
+        # 4. Populate the DataFrame with user input
+        # One-hot encode categorical features by setting the corresponding column to 1
+        for col in input_df_raw.columns:
+            if input_df_raw[col].dtype == 'object':
+                # Construct the one-hot encoded column name
+                feature_name = f"{col}_{input_df_raw[col].iloc[0]}"
+                if feature_name in final_input_df.columns:
+                    final_input_df.loc[0, feature_name] = 1
+
+        # Fill in the numerical features
+        # Note: The original notebook used StandardScaler. Since the scaler object was not saved,
+        # we are passing the raw numerical values. This will affect accuracy but is the only
+        # option with the provided files.
+        for col in input_df_raw.select_dtypes(include=np.number).columns:
+             if col in final_input_df.columns:
+                final_input_df.loc[0, col] = input_df_raw.loc[0, col]
+
+
+        # Ensure all columns are numeric
+        final_input_df = final_input_df.astype(float)
+
+
+        # --- Make Prediction ---
+        try:
+            prediction = model.predict(final_input_df)[0]
+            st.markdown('<div class="result-box"><p class="result-text">Predicted Annual Salary: ₹ {:,.2f}</p></div>'.format(prediction), unsafe_allow_html=True)
+        except Exception as e:
+            st.error(f"An error occurred during prediction: {e}")
+            st.error("Please ensure all inputs are correct. The model is sensitive to the exact feature set it was trained on.")
+
+
+if __name__ == '__main__':
+    main()
