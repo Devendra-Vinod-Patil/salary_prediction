@@ -17,6 +17,29 @@ except Exception as e:
     st.error(f"An error occurred while loading the model: {e}")
     st.stop()
 
+# --- Data Scaling ---
+# The model was trained on data scaled with StandardScaler. Since the scaler object
+# was not saved, we will manually scale the inputs using the mean and standard deviation
+# from the training data analysis found in the notebook. This is crucial for accurate predictions.
+SCALING_STATS = {
+    'Talent_Inflow': {'mean': 1305.96, 'std': 783.72},
+    'Talent_Outflow': {'mean': 1300.92, 'std': 498.17},
+    'Infrastructure_Score': {'mean': 67.17, 'std': 11.32},
+    'Smart_City_Investment': {'mean': 3922.67, 'std': 2180.64},
+    'GCC_Presence': {'mean': 0.299, 'std': 0.458},
+    'MSME_Growth_Rate': {'mean': 7.27, 'std': 3.38},
+    'Unemployment_Rate': {'mean': 7.48, 'std': 2.73},
+    'Education_Hubs': {'mean': 14.78, 'std': 7.29},
+    'Cost_of_Living_Index': {'mean': 79.98, 'std': 11.50},
+    'Job_ID': {'mean': 6000.5, 'std': 3464.24},
+    # Estimated stats for date parts as they were included in the numerical features for scaling
+    'day': {'mean': 15.7, 'std': 8.8},
+    'month': {'mean': 6.5, 'std': 3.45},
+    'year': {'mean': 2023.9, 'std': 0.8},
+    'weekday': {'mean': 3.0, 'std': 2.0},
+    'quarter': {'mean': 2.5, 'std': 1.12}
+}
+
 
 def main():
     """Main function to run the Streamlit application."""
@@ -135,8 +158,8 @@ def main():
             'Skill_Set': skill_set,
             'Experience_Level': exp_level,
             'Company_Name': company_name,
-            'weekday_name': 'Monday',
-            'season': 'Summer',
+            'weekday_name': 'Monday', # Placeholder, will be one-hot encoded
+            'season': 'Summer',       # Placeholder, will be one-hot encoded
             'Job_ID': job_id,
             'Talent_Inflow': talent_inflow,
             'Talent_Outflow': talent_outflow,
@@ -159,21 +182,25 @@ def main():
         final_input_df.loc[0] = 0.0 # Initialize with float to avoid dtype issues
 
 
-        # 4. Populate the DataFrame with user input
-        # One-hot encode categorical features by setting the corresponding column to 1
-        for col in input_df_raw.columns:
-            if input_df_raw[col].dtype == 'object':
-                feature_name = f"{col}_{input_df_raw[col].iloc[0]}"
-                if feature_name in final_input_df.columns:
-                    final_input_df.loc[0, feature_name] = 1.0
+        # 2. Populate the DataFrame with user input
+        # One-hot encode categorical features
+        for col in input_df_raw.select_dtypes(include='object').columns:
+            feature_name = f"{col}_{input_df_raw[col].iloc[0]}"
+            if feature_name in final_input_df.columns:
+                final_input_df.loc[0, feature_name] = 1.0
 
-        # Fill in the numerical features
-        # Note: The original notebook used StandardScaler. For an accurate prediction, these
-        # inputs should be scaled in the same way. Since the scaler was not saved,
-        # we pass the raw values, which will impact accuracy.
+        # Scale and fill numerical features
         for col in input_df_raw.select_dtypes(include=np.number).columns:
              if col in final_input_df.columns:
-                final_input_df.loc[0, col] = input_df_raw.loc[0, col]
+                # Apply standard scaling manually
+                mean = SCALING_STATS.get(col, {}).get('mean', 0)
+                std = SCALING_STATS.get(col, {}).get('std', 1)
+                # Avoid division by zero
+                if std > 0:
+                    scaled_value = (input_df_raw.loc[0, col] - mean) / std
+                    final_input_df.loc[0, col] = scaled_value
+                else:
+                    final_input_df.loc[0, col] = input_df_raw.loc[0, col] # Fallback to raw value
 
 
         final_input_df = final_input_df.astype(float)
